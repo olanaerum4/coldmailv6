@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: '▦' },
   { href: '/campaigns', label: 'Kampanjer', icon: '◈' },
+  { href: '/scraper', label: 'Lead Scraper', icon: '🔍' },
   { href: '/mailboxes', label: 'Mailbokser', icon: '✉' },
   { href: '/warmup', label: 'Warm-up', icon: '🔥' },
   { href: '/inbox', label: 'Innboks', icon: '◉' },
@@ -21,7 +22,7 @@ export default function Sidebar() {
           OUTREACH<span style={{ color: 'var(--text-faint)' }}>OS</span>
         </span>
       </div>
-      <nav className="flex-1 p-2 space-y-0.5">
+      <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
         {nav.map(({ href, label, icon }) => {
           const active = path.startsWith(href)
           return (
@@ -42,7 +43,7 @@ export default function Sidebar() {
         })}
       </nav>
       <div className="p-4" style={{ borderTop: '1px solid var(--border)' }}>
-        <p className="text-xs font-mono" style={{ color: 'var(--text-faint)' }}>v0.3.0</p>
+        <p className="text-xs font-mono" style={{ color: 'var(--text-faint)' }}>v0.4.0</p>
       </div>
     </aside>
   )
