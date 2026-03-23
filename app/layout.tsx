@@ -1,9 +1,9 @@
 import type { Metadata } from 'next'
-import { Geist_Mono } from 'next/font/google'
+
 import './globals.css'
 import Sidebar from '@/components/Sidebar'
 
-const mono = Geist_Mono({ subsets: ['latin'], variable: '--font-mono' })
+const mono = { variable: '--font-mono' }
 
 export const metadata: Metadata = {
   title: 'OutreachOS',

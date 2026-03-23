@@ -1,9 +1,10 @@
-import type { CsvLead } from '@/types'
+export interface CsvLead {
+  email: string
+  name?: string
+  company?: string
+  phone?: string
+}
 
-/**
- * Parse a CSV string into lead objects.
- * Expected columns: email, name, company, phone (flexible header order)
- */
 export function parseCsvLeads(csv: string): { leads: CsvLead[]; errors: string[] } {
   const lines = csv.trim().split(/\r?\n/)
   if (lines.length < 2) return { leads: [], errors: ['CSV har ingen rader med data'] }
@@ -25,7 +26,6 @@ export function parseCsvLeads(csv: string): { leads: CsvLead[]; errors: string[]
     if (!line) continue
 
     const cols = parseCsvLine(line)
-
     const email = cols[emailIdx]?.replace(/['"]/g, '').trim()
     if (!email || !email.includes('@')) {
       errors.push(`Linje ${i + 1}: ugyldig e-post "${email}"`)

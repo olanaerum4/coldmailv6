@@ -5,6 +5,7 @@
 :root {
   --accent: #22d3ee;
   --accent-dim: #0e7490;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, 'SF Mono', monospace;
 }
 
 * { box-sizing: border-box; }
