@@ -17,11 +17,32 @@ export default function Sidebar() {
   const path = usePathname()
   return (
     <aside className="w-52 shrink-0 flex flex-col" style={{ background: '#fff', borderRight: '1px solid var(--border)' }}>
-      <div className="px-5 py-5" style={{ borderBottom: '1px solid var(--border)' }}>
-        <span className="font-mono text-sm font-bold tracking-widest" style={{ color: 'var(--accent)' }}>
-          OUTREACH<span style={{ color: 'var(--text-faint)' }}>OS</span>
+      {/* Founder nav link at top */}
+      <Link
+        href="/founder"
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '14px 20px', borderBottom: '1px solid var(--border)',
+          textDecoration: 'none', background: '#fafafa',
+        }}
+      >
+        <span style={{ fontSize: 16 }}>🏗</span>
+        <div>
+          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 800, fontSize: 13, color: '#0f172a' }}>
+            ola<span style={{ color: '#2563eb' }}>.build</span>
+          </span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: '#94a3b8', display: 'block' }}>
+            Alle prosjekter →
+          </span>
+        </div>
+      </Link>
+
+      <div style={{ padding: '12px 16px 6px', borderBottom: '1px solid var(--border)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 11, color: '#2563eb', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          OutreachOS
         </span>
       </div>
+
       <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
         {nav.map(({ href, label, icon }) => {
           const active = path.startsWith(href)
@@ -34,6 +55,7 @@ export default function Sidebar() {
                 background: active ? '#eff6ff' : 'transparent',
                 color: active ? 'var(--accent)' : 'var(--text-muted)',
                 fontWeight: active ? '600' : '400',
+                textDecoration: 'none',
               }}
             >
               <span className="text-xs">{icon}</span>
@@ -43,7 +65,7 @@ export default function Sidebar() {
         })}
       </nav>
       <div className="p-4" style={{ borderTop: '1px solid var(--border)' }}>
-        <p className="text-xs font-mono" style={{ color: 'var(--text-faint)' }}>v0.4.0</p>
+        <p className="text-xs font-mono" style={{ color: 'var(--text-faint)' }}>v0.5.0</p>
       </div>
     </aside>
   )

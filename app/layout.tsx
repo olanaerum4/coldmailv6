@@ -1,8 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import Sidebar from '@/components/Sidebar'
-
-const mono = { variable: '--font-mono' }
+import ConditionalLayout from '@/components/ConditionalLayout'
 
 export const metadata: Metadata = {
   title: 'OutreachOS',
@@ -12,13 +10,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${mono.variable} antialiased`} style={{ fontFamily: 'var(--font-mono)' }}>
-        <div className="flex h-screen overflow-hidden" style={{ background: 'var(--bg)' }}>
-          <Sidebar />
-          <main className="flex-1 overflow-y-auto">
-            {children}
-          </main>
-        </div>
+      <body style={{ margin: 0, fontFamily: 'var(--font-mono)', background: 'var(--bg)' }}>
+        <ConditionalLayout>{children}</ConditionalLayout>
       </body>
     </html>
   )
