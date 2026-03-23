@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { resend, buildEmailBody, replaceVars } from '@/lib/email'
+import { buildEmailBody, replaceVars } from '@/lib/email'
+import nodemailer from 'nodemailer'
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get('Authorization')
@@ -8,16 +9,54 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const results = { sent: 0, errors: 0, skipped: 0 }
+  const results = { sent: 0, errors: 0, skipped: 0, limited: 0 }
 
   try {
+    // Get active campaigns with their assigned mailbox (or any active mailbox)
     const { data: campaigns } = await supabaseAdmin
       .from('campaigns')
-      .select('id, from_email, from_name')
+      .select('id, from_name, mailbox_id')
       .eq('status', 'active')
 
     if (!campaigns?.length) {
       return NextResponse.json({ ...results, message: 'No active campaigns' })
+    }
+
+    // Get all active mailboxes
+    const { data: allMailboxes } = await supabaseAdmin
+      .from('mailboxes')
+      .select('*')
+      .eq('active', true)
+
+    if (!allMailboxes?.length) {
+      return NextResponse.json({ ...results, message: 'No active mailboxes' })
+    }
+
+    // Build today's send count per mailbox
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const { data: todaySends } = await supabaseAdmin
+      .from('mailbox_sends')
+      .select('mailbox_id')
+      .gte('sent_at', today.toISOString())
+
+    const sendCountMap: Record<string, number> = {}
+    for (const s of todaySends ?? []) {
+      sendCountMap[s.mailbox_id] = (sendCountMap[s.mailbox_id] ?? 0) + 1
+    }
+
+    // Build last-sent time per mailbox
+    const { data: recentSends } = await supabaseAdmin
+      .from('mailbox_sends')
+      .select('mailbox_id, sent_at')
+      .order('sent_at', { ascending: false })
+
+    const lastSentMap: Record<string, Date> = {}
+    for (const s of recentSends ?? []) {
+      if (!lastSentMap[s.mailbox_id]) {
+        lastSentMap[s.mailbox_id] = new Date(s.sent_at)
+      }
     }
 
     for (const campaign of campaigns) {
@@ -29,40 +68,65 @@ export async function POST(req: NextRequest) {
 
       if (!sequences?.length) continue
 
-      // Step 1: send to all pending leads
+      // Pick mailbox for this campaign
+      let mailbox = campaign.mailbox_id
+        ? allMailboxes.find((m) => m.id === campaign.mailbox_id)
+        : null
+
+      // Round-robin fallback: pick mailbox with most remaining quota
+      if (!mailbox) {
+        mailbox = allMailboxes
+          .filter((m) => (sendCountMap[m.id] ?? 0) < m.daily_limit)
+          .sort((a, b) => {
+            const remainA = a.daily_limit - (sendCountMap[a.id] ?? 0)
+            const remainB = b.daily_limit - (sendCountMap[b.id] ?? 0)
+            return remainB - remainA
+          })[0]
+      }
+
+      if (!mailbox) {
+        results.limited++
+        continue
+      }
+
+      // Check daily limit
+      const sentToday = sendCountMap[mailbox.id] ?? 0
+      if (sentToday >= mailbox.daily_limit) {
+        results.limited++
+        continue
+      }
+
+      // Check interval (minutes since last send from this mailbox)
+      const lastSent = lastSentMap[mailbox.id]
+      if (lastSent) {
+        const minsSinceLast = (Date.now() - lastSent.getTime()) / 60000
+        if (minsSinceLast < mailbox.interval_minutes) {
+          results.skipped++
+          continue
+        }
+      }
+
+      // Get one pending lead (one at a time per cron run to respect interval)
       const { data: pendingLeads } = await supabaseAdmin
         .from('leads')
         .select('*')
         .eq('campaign_id', campaign.id)
         .eq('status', 'pending')
+        .limit(1)
 
-      for (const lead of pendingLeads ?? []) {
-        try {
-          await sendStep(lead, sequences[0], campaign)
-          results.sent++
-        } catch (e) {
-          console.error('send error', lead.email, e)
-          results.errors++
-        }
-      }
-
-      // Follow-up steps: active leads ready for next step
       const { data: activeLeads } = await supabaseAdmin
         .from('leads')
         .select('*')
         .eq('campaign_id', campaign.id)
         .eq('status', 'active')
 
+      // Combine: pending first, then active leads due for follow-up
+      const leadsToProcess: any[] = [...(pendingLeads ?? [])]
+
       for (const lead of activeLeads ?? []) {
         const nextStepNum = lead.current_step + 1
         const nextSeq = sequences.find((s: any) => s.step_number === nextStepNum)
-
-        if (!nextSeq) {
-          // Completed all steps
-          await supabaseAdmin.from('leads').update({ status: 'active' }).eq('id', lead.id)
-          results.skipped++
-          continue
-        }
+        if (!nextSeq) continue
 
         const { data: lastEmail } = await supabaseAdmin
           .from('emails_sent')
@@ -73,19 +137,26 @@ export async function POST(req: NextRequest) {
           .single()
 
         if (!lastEmail) continue
-
         const daysSince = (Date.now() - new Date(lastEmail.sent_at).getTime()) / 86_400_000
         if (daysSince >= nextSeq.delay_days) {
-          try {
-            await sendStep(lead, nextSeq, campaign)
-            results.sent++
-          } catch (e) {
-            console.error('followup error', lead.email, e)
-            results.errors++
-          }
-        } else {
-          results.skipped++
+          leadsToProcess.push({ ...lead, _nextSeq: nextSeq })
         }
+      }
+
+      if (!leadsToProcess.length) continue
+
+      // Send to first eligible lead (interval controls rate)
+      const lead = leadsToProcess[0]
+      const seq = lead._nextSeq ?? sequences[0]
+
+      try {
+        await sendViaSmtp(lead, seq, campaign, mailbox)
+        sendCountMap[mailbox.id] = (sendCountMap[mailbox.id] ?? 0) + 1
+        lastSentMap[mailbox.id] = new Date()
+        results.sent++
+      } catch (e) {
+        console.error('send error', lead.email, e)
+        results.errors++
       }
     }
 
@@ -95,34 +166,35 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function sendStep(lead: any, sequence: any, campaign: any) {
+async function sendViaSmtp(lead: any, sequence: any, campaign: any, mailbox: any) {
   const subject = replaceVars(sequence.subject, lead)
   const body = replaceVars(sequence.body, lead)
 
   const { data: emailSent, error: esErr } = await supabaseAdmin
     .from('emails_sent')
-    .insert({
-      lead_id: lead.id,
-      sequence_id: sequence.id,
-      campaign_id: campaign.id,
-    })
+    .insert({ lead_id: lead.id, sequence_id: sequence.id, campaign_id: campaign.id })
     .select()
     .single()
 
   if (esErr || !emailSent) throw new Error(esErr?.message ?? 'Failed to create email_sent')
 
-  const { data: pixel, error: pxErr } = await supabaseAdmin
+  const { data: pixel } = await supabaseAdmin
     .from('tracking_pixels')
     .insert({ email_sent_id: emailSent.id })
     .select()
     .single()
 
-  if (pxErr || !pixel) throw new Error('Failed to create tracking pixel')
+  const htmlBody = buildEmailBody(body, lead.id, emailSent.id, pixel?.id ?? '')
 
-  const htmlBody = buildEmailBody(body, lead.id, emailSent.id, pixel.id)
+  const transporter = nodemailer.createTransport({
+    host: mailbox.smtp_host,
+    port: mailbox.smtp_port,
+    secure: mailbox.smtp_port === 465,
+    auth: { user: mailbox.smtp_user, pass: mailbox.smtp_password },
+  })
 
-  const { error: sendErr } = await resend.emails.send({
-    from: `${campaign.from_name} <${campaign.from_email}>`,
+  await transporter.sendMail({
+    from: `${campaign.from_name || mailbox.name} <${mailbox.email}>`,
     to: lead.email,
     subject,
     html: htmlBody,
@@ -132,8 +204,12 @@ async function sendStep(lead: any, sequence: any, campaign: any) {
     },
   })
 
-  if (sendErr) throw new Error(String(sendErr))
+  // Record send in mailbox_sends
+  await supabaseAdmin
+    .from('mailbox_sends')
+    .insert({ mailbox_id: mailbox.id, email_sent_id: emailSent.id })
 
+  // Update lead status
   await supabaseAdmin
     .from('leads')
     .update({ status: 'active', current_step: sequence.step_number })
