@@ -1,0 +1,19 @@
+{
+  "name": "ola.build – Mission Control",
+  "short_name": "ola.build",
+  "description": "Founder dashboard & OutreachOS",
+  "start_url": "/founder",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Ny idé", "url": "/ideas", "description": "Legg til ny idé" },
+    { "name": "Innboks", "url": "/inbox", "description": "Se svar på outreach" },
+    { "name": "Deals", "url": "/deals", "description": "Pipeline" }
+  ]
+}
