@@ -6,7 +6,10 @@ const nav = [
   { href: '/dashboard', label: 'Dashboard', icon: '▦' },
   { href: '/campaigns', label: 'Kampanjer', icon: '◈' },
   { href: '/mailboxes', label: 'Mailbokser', icon: '✉' },
+  { href: '/warmup', label: 'Warm-up', icon: '🔥' },
   { href: '/inbox', label: 'Innboks', icon: '◉' },
+  { href: '/unsubscribes', label: 'Avmeldte', icon: '⊘' },
+  { href: '/agent', label: 'Agent API', icon: '⚡' },
 ]
 
 export default function Sidebar() {
@@ -39,7 +42,7 @@ export default function Sidebar() {
         })}
       </nav>
       <div className="p-4" style={{ borderTop: '1px solid var(--border)' }}>
-        <p className="text-xs font-mono" style={{ color: 'var(--text-faint)' }}>v0.2.0</p>
+        <p className="text-xs font-mono" style={{ color: 'var(--text-faint)' }}>v0.3.0</p>
       </div>
     </aside>
   )
